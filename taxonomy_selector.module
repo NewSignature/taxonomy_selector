@@ -1,0 +1,210 @@
+<?php
+/**
+ * @file 
+ * 
+ * Copyright 2011 New Signature
+ * http://www.newsignature.com
+ *
+ * @author Andrew Marcus
+ * @since Aug 2, 2011
+ */
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function taxonomy_selector_field_widget_info() {
+  return array(
+    'taxonomy_chosen' => array(
+      'label' => t('JQuery "Chosen" UI'),
+      'field types' => array('taxonomy_term_reference', 'node_reference', 'user_reference', 'list_integer', 'list_float', 'list_text'),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_CUSTOM,
+      ),
+    ),
+    'taxonomy_hierarchy' => array(
+      'label' => t('Hierarchy Checkboxes'),
+      'field types' => array('taxonomy_term_reference'),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_CUSTOM,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function taxonomy_selector_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  
+  switch($instance['widget']['type']) {
+    
+    case 'taxonomy_chosen': 
+      // Start with the standard select widget for this taxonomy 
+      $inst = $instance;
+      $inst['widget']['type'] = 'options_select';
+      $element = options_field_widget_form($form, $form_state, $field, $inst, $langcode, $items, $delta, $element);
+      
+      // Attach the "chosen" jQuery library
+      $element['#attributes']['class'][] = 'taxonomy-chosen';
+      $element['#attached']['library'][] = array('taxonomy_selector', 'chosen');
+      break;
+      
+    case 'taxonomy_hierarchy':
+      $value_key = key($field['columns']);
+
+      $required = $element['#required'];
+      $has_value = isset($items[0][$value_key]);
+      
+      // Put current field values in shape.
+      $properties = array(
+        'optgroups' => TRUE,
+        'empty_option' => FALSE,
+      );
+      
+      // Get the default values
+      $default_value = array();
+      foreach ($items as $delta => $item) {
+        if (!empty($item[$value_key])) {
+          $tid = $item[$value_key];
+          $default_value[$tid] = $tid;
+        }
+      }
+      
+      $element += array(
+        '#type' => 'taxonomy_hierarchy',
+        '#title' => $instance['label'],
+        '#element_validate' => array('taxonomy_selector_field_widget_validate'),
+        '#properties' => $properties,
+        '#value_key' => $value_key,
+        '#required' => $required,
+        '#theme_wrappers' => array('form_element'),
+        '#attached' => array(
+          'js' => array( drupal_get_path('module', 'taxonomy_selector') . '/taxonomy-hierarchy.js' ),
+          'css' => array( drupal_get_path('module', 'taxonomy_selector') . '/taxonomy-hierarchy.css' ),
+        ),
+        'description' => array(
+          '#prefix' => '<div class="description">',
+          '#suffix' => '</div>',
+          '#markup' => $instance['description'],
+        ),
+      );
+      unset($element['#description']);
+      
+      $term_ids = array();
+      
+      // Get the taxonomy terms
+      foreach ($field['settings']['allowed_values'] as $tree) {
+        if ($vocabulary = taxonomy_vocabulary_machine_name_load($tree['vocabulary'])) {
+          if ($terms = taxonomy_get_tree($vocabulary->vid, $tree['parent'])) {
+            foreach ($terms as $term) {
+              $term_ids[$term->tid] = $term;
+              
+              // List main items but do not give them checkboxes
+              if ($term->depth == 0) {
+                $element[$term->tid] = array(
+                  '#type' => 'item',
+                  '#title' => $term->name,
+                  '#name' => 'parent-item',
+                );
+              }
+              else {
+                $parents = array($term->tid);
+                
+                // Recurse through the parents
+                $parent = $term;
+                while (!empty($parent->parents) && $parent->parents[0] > 0) {
+                  $tid = $term->parents[0];
+                  array_unshift($parents, $tid);
+                  if (isset($term_ids[$tid])) {
+                    $parent = $term_ids[$tid];
+                  }
+                  else {
+                    break;
+                  }
+                }
+                drupal_array_set_nested_value($element, $parents, array(
+                  '#type' => 'checkbox',
+                  '#title' => $term->name,
+                  '#return_value' => $term->tid,
+                  '#default_value' => !empty($default_value[$term->tid]) ? $default_value[$term->tid] : 0,
+                ));
+              }
+            }
+          }
+        }
+      }
+      break;      
+  }
+  return $element;
+}
+
+/**
+ * Form element validation handler for options element.
+ */
+function taxonomy_selector_field_widget_validate(&$element, &$form_state) {
+  // Flatten the values
+  $values = drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+  $values = options_array_flatten($values);
+  $values = array_filter($values);
+  
+  $element['#value'] = $values;
+  
+  if ($element['#required'] && empty($values)) {
+    form_error($element, t('!name field is required.', array('!name' => $element['#title'])));
+  }
+  // Transpose selections from field => delta to delta => field, turning
+  // multiple selected options into multiple parent elements.
+  $items = _options_form_to_storage($element);
+  form_set_value($element, $items, $form_state);
+}
+
+/**
+ * Implements hook_element_info().
+ * 
+ * Defines a render element type for the chosen selector.
+ */
+function taxonomy_selector_element_info() {
+  return array(
+    'chosen' => array(
+      '#input' => TRUE,
+      '#multiple' => FALSE,
+      '#theme' => 'select',
+      '#theme_wrappers' => array('form_element'),
+      '#process' => array('taxonomy_selector_process_chosen', 'form_process_select', 'ajax_process_form'),
+    ),
+  );
+}
+
+function taxonomy_selector_process_chosen($element) {
+  $element['#attached']['library'][] = array('taxonomy_selector', 'chosen');
+  $element['#attributes']['class'][] = 'taxonomy-chosen';
+  
+  // We must do this in order to flatten the options array when validating the form. 
+  $element['#type'] = 'select';
+  return $element;
+}
+
+/**
+ * Implements hook_library().
+ * 
+ * Defines a library for the "chosen" jQuery plugin.
+ */
+function taxonomy_selector_library() {
+  $path = drupal_get_path('module', 'taxonomy_selector');
+  
+  return array(
+    'chosen' => array(
+      'title' => t('Chosen'),
+      'website' => 'http://harvesthq.github.com/chosen/',
+      'version' => '0.9.1',
+      'js' => array(
+        $path . '/chosen/chosen.jquery.min.js' => array('type' => 'file'),
+        $path . '/taxonomy-chosen.js' => array('type' => 'file'),
+      ),
+      'css' => array(
+        $path . '/chosen/chosen.css' => array('type' => 'file'),
+        $path . '/taxonomy-chosen.css' => array('type' => 'file'),
+      ),
+    ),
+  );
+}

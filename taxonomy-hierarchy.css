@@ -1,0 +1,53 @@
+.field-widget-taxonomy-hierarchy .children .form-item {
+  margin-left: 13px;
+}
+
+.field-widget-taxonomy-hierarchy .form-item-parent-item > label {
+  cursor: pointer;
+  color: #aaa;
+  font-size: 110%;
+  font-weight: normal;
+}
+
+.field-widget-taxonomy-hierarchy .form-item-parent-item > label:hover {
+	color: #555;
+}
+
+.field-widget-taxonomy-hierarchy .form-item-parent-item.has-active-children > label {
+  color: #222;
+}
+
+
+
+.field-widget-taxonomy-hierarchy .arrow {
+  -moz-transition: 0.3s all;
+  -webkit-transition: 0.3s all;
+  -o-transition: 0.3s all;
+  -ms-transition: 0.3s all;
+  transition: 0.3s all;
+  float: left;
+  display: block;
+  width: 12px;
+  height: 20px;
+  color: #999;
+}
+
+.field-widget-taxonomy-hierarchy .open .arrow {
+  -moz-transform: rotate(90deg);
+  -webkit-transform: rotate(90deg);
+  -o-transform: rotate(90deg);
+  -ms-transform: rotate(90deg);
+  transform: rotate(90deg);
+  
+  -moz-transform-origin: 4px center;
+  -webkit-transform-origin: 4px center;
+  -o-transform-origin: 4px center;
+  -ms-transform-origin: 4px center;
+  transform-origin: 4px center;
+}
+
+.field-widget-taxonomy-hierarchy small.count {
+	font-size: x-small;
+	font-weight: bold;
+	color: #093;
+}

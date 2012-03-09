@@ -1,0 +1,8 @@
+name = "Taxonomy Selector"
+description = "Adds fancy selector widgets for taxonomy term fields."
+core = 7.x
+version = 7.1.x
+package = "Other"
+
+dependencies[] = field
+dependencies[] = taxonomy
